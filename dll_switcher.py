@@ -22,22 +22,24 @@ def store_dll_names():
 
 
 def validate_ori_root():
-    global ORI_ROOT, ASSEMBLY_CSHARP
-    if not os.path.exists(ORI_ROOT):
+    ori_root = ORI_ROOT
+    assembly_csharp = ASSEMBLY_CSHARP
+    if not os.path.exists(ori_root):
         path = filedialog.askdirectory(mustexist=True,
                                        title=f'Select the Ori DE directory')
         if not path:
             sys.exit('Ori DE directory not found')
-        ORI_ROOT = os.path.abspath(path)
-        ASSEMBLY_CSHARP = os.path.join(ORI_ROOT, 'oriDE_Data', 'Managed', 'Assembly-CSharp.dll')
+        ori_root = os.path.abspath(path)
+        assembly_csharp = os.path.join(ori_root, 'oriDE_Data', 'Managed', 'Assembly-CSharp.dll')
+    return ori_root, assembly_csharp
 
 
-def get_dll_path(dll_name, force_open_dialog):
+def get_dll_path(dll_name, ori_root, force_open_dialog):
     if not force_open_dialog and dll_name in dll_names:
         dll_path = dll_names[dll_name]
     else:
         path = filedialog.askopenfilename(filetypes=[('DLL', '*.dll')],
-                                          initialdir=ORI_ROOT,
+                                          initialdir=ori_root,
                                           title=f'Choose "{dll_name}" dll file')
         if not path:
             sys.exit('dll file not found')
@@ -54,14 +56,14 @@ def main():
                         action='store_true', help='force "Open file" dialog window', dest='force_open')
     args = parser.parse_args()
 
-    validate_ori_root()
+    ori_root, assembly_csharp = validate_ori_root()
 
     dll_name = args.dll
-    dll_path = get_dll_path(dll_name, args.force_open)
+    dll_path = get_dll_path(dll_name, ori_root, args.force_open)
     if not os.path.exists(dll_path):
-        dll_path = get_dll_path(dll_name, True)
+        dll_path = get_dll_path(dll_name, ori_root, True)
 
-    shutil.copy(dll_path, ASSEMBLY_CSHARP)
+    shutil.copy(dll_path, assembly_csharp)
 
     print('Done!')
 
