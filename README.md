@@ -1,11 +1,8 @@
 ### Easily switch to a different dll in Ori DE. ###
 
-This program will locate the requested dll and copy it into `...\Ori DE\oriDE_Data\Managed` with the name `Assembly-CSharp.dll` for you.  
-dll names will be saved for future use.
+This program will locate the requested dll and copy it into `...\Ori DE\oriDE_Data\Managed` with the name `Assembly-CSharp.dll` for you.
 
-Download `dll_switcher.py` and run it via the console with a dll name as an argument. You can place this file anywhere (I'd put it in the Ori directory)
+Download `dll_switcher.py` and run it (double-click should work, but if not, run the command `python dll_switcher.py` in cmd). You can place this file anywhere (I'd put it in the Ori directory).
 
-Examples:  
-1. `python dll_switcher.py rando` --> an "Open file" window will open. Choose your rando dll. 
-2. `python dll_switcher.py nopause` --> an "Open file" window will open. Choose your nopause dll. 
-3. `python dll_switcher.py rando` --> your rando dll was remembered from the first time and will be automatically copied in.
+Click on "New" and choose a short name for your DLL (e.g "rando", "nopause" etc). Then click on "Locate DLL" and select the proper file. Finally, hit "Apply".  
+DLL names will be saved so that you would simply pick your DLL from the list and click "Apply".
