@@ -22,7 +22,7 @@ class Switcher(object):
         self.tk_root.title(TITLE)
         self.tk_root.columnconfigure(0, weight=1)
         self.tk_root.rowconfigure(2, weight=1)
-        self.tk_root.geometry('380x140')
+        self.tk_root.geometry('350x120')
         self.tk_root.protocol('WM_DELETE_WINDOW', self._on_destroy)
 
         self.combobox = Combobox(self.tk_root, values=tuple(self.dll_names.keys()), state="readonly")
