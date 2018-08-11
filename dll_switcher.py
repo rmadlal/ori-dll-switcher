@@ -1,6 +1,7 @@
 import os
 import json
 import shutil
+import argparse
 from tkinter import *
 from tkinter import filedialog, messagebox
 from tkinter.ttk import Combobox
@@ -13,7 +14,7 @@ DLL_NAMES = 'dll_names.json'
 
 class Switcher(object):
     def __init__(self):
-        self.dll_names = self._load_dll_names()
+        self.dll_names = self.load_dll_names()
         self.list = self.dll_names.keys()
         self.dll_path = ''
         self.dll_label_hint = 'Please locate your specified DLL.'
@@ -49,7 +50,7 @@ class Switcher(object):
         self._update_chosen_dll()
 
     @staticmethod
-    def _load_dll_names():
+    def load_dll_names():
         try:
             with open(DLL_NAMES, 'r') as f:
                 return json.load(f)
@@ -68,7 +69,7 @@ class Switcher(object):
                                            title='Select the Ori DE directory',
                                            mustexist=True)
             if not path:
-                messagebox.showerror(title=TITLE, message='Ori DE directory not found')
+                messagebox.showerror(message='Ori DE directory not found', parent=self.tk_root, title=TITLE)
                 sys.exit(1)
             ori_root = os.path.abspath(path)
             assembly_csharp = os.path.join(ori_root, 'oriDE_Data', 'Managed', 'Assembly-CSharp.dll')
@@ -113,6 +114,7 @@ class Switcher(object):
         dll_name = self.combobox.get()
         path = filedialog.askopenfilename(filetypes=[('DLL', '*.dll')],
                                           initialdir=self.ori_root,
+                                          parent=self.tk_root,
                                           title='Choose your "%s" DLL file' % dll_name)
         if path:
             self.dll_path = os.path.abspath(path)
@@ -122,7 +124,7 @@ class Switcher(object):
     # user clicked on button_apply
     def _apply(self):
         shutil.copy(self.dll_path, self.assembly_csharp)
-        messagebox.showinfo(title=TITLE, message='Done!', parent=self.tk_root)
+        messagebox.showinfo(message='Done!', parent=self.tk_root, title=TITLE)
         self._on_destroy()
 
     def _on_destroy(self):
@@ -131,6 +133,17 @@ class Switcher(object):
 
 
 def main():
+    parser = argparse.ArgumentParser(description='Switch to a different Ori dll.')
+    parser.add_argument('dll', nargs=argparse.OPTIONAL, help="the dll's name")
+    args = parser.parse_args()
+    if args.dll:
+        dll_names = Switcher.load_dll_names()
+        if args.dll not in dll_names:
+            sys.exit('"%s" DLL not found' % args.dll)
+        shutil.copy(dll_names[args.dll], ASSEMBLY_CSHARP)
+        print('Done!')
+        return
+
     gui = Switcher()
     gui.tk_root.mainloop()
 
