@@ -5,6 +5,7 @@ import argparse
 from tkinter import *
 from tkinter import filedialog, messagebox
 from tkinter.ttk import Combobox
+from win32com.client import Dispatch
 
 TITLE = 'Ori DLL Switcher'
 ORI_ROOT = r'C:\Program Files (x86)\Steam\steamapps\common\Ori DE'
@@ -44,7 +45,11 @@ class Switcher(object):
         self.button_locate.grid(row=1, column=1, padx=8, sticky=W+E)
 
         self.button_apply = Button(self.tk_root, text='Apply', command=self._apply, state=DISABLED)
-        self.button_apply.grid(row=2, column=0, columnspan=2, padx=8, pady=16, sticky=S)
+        self.button_apply.grid(row=2, column=0, padx=8, pady=16, sticky=S)
+
+        self.button_create_shortcut = Button(
+            self.tk_root, text='Create shortcut', command=self._create_shortcut, state=DISABLED)
+        self.button_create_shortcut.grid(row=2, column=1, padx=8, pady=16, sticky=W+E+S)
 
         self.ori_root, self.assembly_csharp = self._validate_ori_root()
         self._update_chosen_dll()
@@ -64,15 +69,23 @@ class Switcher(object):
     def _validate_ori_root(self):
         ori_root = ORI_ROOT
         assembly_csharp = ASSEMBLY_CSHARP
-        if not os.path.exists(ori_root):
+        while not os.path.exists(os.path.dirname(assembly_csharp)):
             path = filedialog.askdirectory(parent=self.tk_root,
                                            title='Select the Ori DE directory',
                                            mustexist=True)
             if not path:
                 messagebox.showerror(message='Ori DE directory not found', parent=self.tk_root, title=TITLE)
                 sys.exit(1)
+
             ori_root = os.path.abspath(path)
             assembly_csharp = os.path.join(ori_root, 'oriDE_Data', 'Managed', 'Assembly-CSharp.dll')
+            if os.path.exists(os.path.dirname(assembly_csharp)):
+                break
+
+            messagebox.showerror(
+                message='Invalid Ori DE directory. Should be the directory that contains oriDE.exe.',
+                parent=self.tk_root, title=TITLE)
+
         return ori_root, assembly_csharp
 
     # new dll path was set
@@ -82,10 +95,12 @@ class Switcher(object):
             self.stringvar_label_dll.set(self.dll_path.split(os.sep)[-1])
             self.label_dll.configure(state=NORMAL)
             self.button_apply.configure(state=NORMAL)
+            self.button_create_shortcut.configure(state=NORMAL)
         else:
             self.stringvar_label_dll.set(self.dll_label_hint if dll_name else '')
             self.label_dll.configure(state=DISABLED)
             self.button_apply.configure(state=DISABLED)
+            self.button_create_shortcut.configure(state=DISABLED)
 
     # user chose a name from the list
     def _update_chosen_dll(self):
@@ -126,6 +141,33 @@ class Switcher(object):
         shutil.copy(self.dll_path, self.assembly_csharp)
         messagebox.showinfo(message='Done!', parent=self.tk_root, title=TITLE)
         self._on_destroy()
+
+    # user clicked on button_create_shortcut
+    def _create_shortcut(self):
+        dll_name = self.combobox.get()
+        shortcut_name = 'SwitchTo%s.lnk' % dll_name.capitalize()
+        win_cmd_path = r'C:\Windows\System32\cmd.exe'
+        program_arg = os.path.basename(sys.argv[0])
+
+        if program_arg.endswith('.py'):
+            program_arg = 'python ' + program_arg
+        elif program_arg.endswith('.exe'):
+            program_arg = program_arg[:-4]
+        args = '/c %s %s' % (program_arg, dll_name)
+
+        path = filedialog.askdirectory(parent=self.tk_root,
+                                       title='Choose location',
+                                       mustexist=True)
+        if not path:
+            return
+        path = os.path.abspath(path)
+
+        shortcut = Dispatch('WScript.Shell').CreateShortCut(os.path.join(path, shortcut_name))
+        shortcut.Targetpath = win_cmd_path
+        shortcut.Arguments = args
+        shortcut.WorkingDirectory = os.getcwd()
+        shortcut.save()
+        messagebox.showinfo(message='Shortcut created', parent=self.tk_root, title=TITLE)
 
     def _on_destroy(self):
         self._store_dll_names()
