@@ -57,7 +57,7 @@ class Switcher(object):
     @staticmethod
     def load_dll_names():
         try:
-            with open(DLL_NAMES, 'r') as f:
+            with open(DLL_NAMES) as f:
                 return json.load(f)
         except OSError:
             return {}
@@ -130,7 +130,7 @@ class Switcher(object):
         path = filedialog.askopenfilename(filetypes=[('DLL', '*.dll')],
                                           initialdir=self.ori_root,
                                           parent=self.tk_root,
-                                          title='Choose your "%s" DLL file' % dll_name)
+                                          title=f'Choose your "{dll_name}" DLL file')
         if path:
             self.dll_path = os.path.abspath(path)
             self.dll_names[dll_name] = self.dll_path
@@ -145,7 +145,7 @@ class Switcher(object):
     # user clicked on button_create_shortcut
     def _create_shortcut(self):
         dll_name = self.combobox.get()
-        shortcut_name = 'SwitchTo%s.lnk' % dll_name.capitalize()
+        shortcut_name = f'SwitchTo{dll_name.capitalize()}.lnk'
         win_cmd_path = r'C:\Windows\System32\cmd.exe'
         program_arg = os.path.basename(sys.argv[0])
 
@@ -153,7 +153,10 @@ class Switcher(object):
             program_arg = 'python ' + program_arg
         elif program_arg.endswith('.exe'):
             program_arg = program_arg[:-4]
-        args = '/c %s %s' % (program_arg, dll_name)
+        else:
+            messagebox.showerror(message='Cannot create shortcut', parent=self.tk_root, title=TITLE)
+            return
+        args = f'/c {program_arg} {dll_name}'
 
         path = filedialog.askdirectory(parent=self.tk_root,
                                        title='Choose location',
@@ -181,7 +184,7 @@ def main():
     if args.dll:
         dll_names = Switcher.load_dll_names()
         if args.dll not in dll_names:
-            sys.exit('"%s" DLL not found' % args.dll)
+            sys.exit(f'"{args.dll}" DLL not found')
         shutil.copy(dll_names[args.dll], ASSEMBLY_CSHARP)
         print('Done!')
         return
