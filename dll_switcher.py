@@ -1,150 +1,207 @@
-import os
-import json
-import shutil
 import argparse
+import json
+import os
+import shutil
 from tkinter import *
 from tkinter import filedialog, messagebox
 from tkinter.ttk import Combobox
+
 from win32com.client import Dispatch
 
 TITLE = 'Ori DLL Switcher'
 ORI_ROOT = r'C:\Program Files (x86)\Steam\steamapps\common\Ori DE'
-ASSEMBLY_CSHARP = os.path.join(ORI_ROOT, 'oriDE_Data', 'Managed', 'Assembly-CSharp.dll')
-DLL_NAMES = 'dll_names.json'
+ASSEMBLY_CSHARP = r'oriDE_Data\Managed\Assembly-CSharp.dll'
+SWITCHER_JSON = 'dll_switcher.json'
+KEY_ROOT = 'root'
+KEY_DLL_NAMES = 'dll_names'
 
 
 class Switcher(object):
+
     def __init__(self):
-        self.dll_names = self.load_dll_names()
-        self.list = self.dll_names.keys()
-        self.dll_path = ''
-        self.dll_label_hint = 'Please locate your specified DLL.'
-
-        self.tk_root = Tk()
-        self.tk_root.title(TITLE)
-        self.tk_root.columnconfigure(0, weight=1)
-        self.tk_root.rowconfigure(2, weight=1)
-        self.tk_root.geometry('350x120')
-        self.tk_root.protocol('WM_DELETE_WINDOW', self._on_destroy)
-
-        self.combobox = Combobox(self.tk_root, values=tuple(self.dll_names.keys()), state="readonly")
-        self.combobox.grid(row=0, column=0, padx=8, pady=8, sticky=W+E)
-        self.combobox.bind('<<ComboboxSelected>>', lambda evt: self._update_chosen_dll())
-        self.combobox.bind('<Return>', lambda evt: self._add_new_dll_name(self.combobox.get()))
-        if self.dll_names:
-            self.combobox.current(0)
-
-        self.button_new = Button(self.tk_root, text='New', command=self._button_new)
-        self.button_new.grid(row=0, column=1, padx=8, sticky=W+E)
-
-        self.stringvar_label_dll = StringVar()
-        self.label_dll = Label(self.tk_root, textvariable=self.stringvar_label_dll)
-        self.label_dll.grid(row=1, column=0, padx=8, sticky=W)
-
-        self.button_locate = Button(self.tk_root, text='Locate DLL', command=self._locate_dll)
-        self.button_locate.grid(row=1, column=1, padx=8, sticky=W+E)
-
-        self.button_apply = Button(self.tk_root, text='Apply', command=self._apply, state=DISABLED)
-        self.button_apply.grid(row=2, column=0, padx=8, pady=16, sticky=S)
-
-        self.button_create_shortcut = Button(
-            self.tk_root, text='Create shortcut', command=self._create_shortcut, state=DISABLED)
-        self.button_create_shortcut.grid(row=2, column=1, padx=8, pady=16, sticky=W+E+S)
-
-        self.ori_root, self.assembly_csharp = self._validate_ori_root()
-        self._update_chosen_dll()
+        self._data = self._load_data_json() or self._init_data()
 
     @staticmethod
-    def load_dll_names():
-        try:
-            with open(DLL_NAMES) as f:
-                return json.load(f)
-        except OSError:
-            return {}
+    def _init_data():
+        return {
+            KEY_ROOT: ORI_ROOT,
+            KEY_DLL_NAMES: {}
+        }
 
-    def _store_dll_names(self):
-        with open(DLL_NAMES, 'w') as f:
-            json.dump(self.dll_names, f)
+    @staticmethod
+    def _check_data_valid(data):
+        return KEY_ROOT in data and KEY_DLL_NAMES in data
+
+    def _load_data_json(self):
+        try:
+            with open(SWITCHER_JSON) as f:
+                data = json.load(f)
+                if not self._check_data_valid(data):
+                    return None
+                return data
+        except OSError:
+            return None
+
+    def save_data_json(self):
+        with open(SWITCHER_JSON, 'w') as f:
+            json.dump(self._data, f)
+
+    @staticmethod
+    def get_assemblycsharp_path(ori_root: str):
+        path = os.path.join(ori_root, ASSEMBLY_CSHARP)
+        return path if os.path.exists(os.path.dirname(path)) else None
+
+    @property
+    def ori_root(self):
+        return self._data[KEY_ROOT]
+
+    @ori_root.setter
+    def ori_root(self, ori_root):
+        self._data[KEY_ROOT] = ori_root
+
+    @property
+    def assembly_csharp(self):
+        return self.get_assemblycsharp_path(self.ori_root)
+
+    @property
+    def dll_names(self):
+        return self._data[KEY_DLL_NAMES]
+
+    def add_dll_name(self, name):
+        self.set_dll_path(name, None)
+
+    def get_dll_path(self, name):
+        return self.dll_names[name] if name in self.dll_names else None
+
+    def set_dll_path(self, name, path):
+        self.dll_names[name] = path
+
+    def switch(self, name):
+        if name not in self.dll_names:
+            # Should never happen
+            raise KeyError
+        shutil.copy(self.get_dll_path(name), self.assembly_csharp)
+
+
+class Ui(object):
+    def __init__(self, switcher: Switcher):
+        self._switcher = switcher
+        self._tk_root = Tk()
+        self._tk_root.title(TITLE)
+        self._tk_root.columnconfigure(0, weight=1)
+        self._tk_root.rowconfigure(1, weight=1)
+        self._tk_root.geometry('260x90')
+        self._tk_root.protocol('WM_DELETE_WINDOW', self._on_destroy)
+        self._dll_label_hint = 'Please locate your specified DLL'
+
+        # UI elements
+
+        self._combobox = Combobox(self._tk_root, values=tuple(self._switcher.dll_names), state="readonly")
+        self._combobox.grid(row=0, column=0, columnspan=2, padx=8, pady=8, sticky=W + E)
+        self._combobox.bind('<<ComboboxSelected>>', lambda evt: self._update_chosen_dll())
+        self._combobox.bind('<Return>', lambda evt: self._add_new_dll_name(self._combobox.get()))
+        if self._switcher.dll_names:
+            self._combobox.current(0)
+
+        self._button_new = Button(self._tk_root, text='New', command=self._button_new)
+        self._button_new.grid(row=0, column=2, padx=8, sticky=W + E)
+
+        self._button_locate = Button(self._tk_root, text='Locate DLL', command=self._locate_dll)
+        self._button_locate.grid(row=1, column=0, padx=8, pady=8, sticky=W + S)
+
+        self._button_create_shortcut = Button(
+            self._tk_root, text='Create shortcut', command=self._create_shortcut, state=DISABLED)
+        self._button_create_shortcut.grid(row=1, column=1, padx=8, pady=8, sticky=S)
+
+        self._button_apply = Button(self._tk_root, text='Apply', command=self._apply, state=DISABLED)
+        self._button_apply.grid(row=1, column=2, padx=8, pady=8, sticky=E + S)
+
+        self._validate_ori_root()
+        self._update_chosen_dll()
+
+    def mainloop(self):
+        self._tk_root.mainloop()
 
     def _validate_ori_root(self):
-        ori_root = ORI_ROOT
-        assembly_csharp = ASSEMBLY_CSHARP
-        while not os.path.exists(os.path.dirname(assembly_csharp)):
-            path = filedialog.askdirectory(parent=self.tk_root,
-                                           title='Select the Ori DE directory',
-                                           mustexist=True)
-            if not path:
-                messagebox.showerror(message='Ori DE directory not found', parent=self.tk_root, title=TITLE)
+        if self._switcher.assembly_csharp:
+            return
+
+        messagebox.showinfo(message='Please locate your Ori DE directory', parent=self._tk_root, title=TITLE)
+        while True:
+            ori_root = filedialog.askdirectory(parent=self._tk_root,
+                                               title='Select the Ori DE directory',
+                                               mustexist=True)
+            if not ori_root:
+                messagebox.showerror(message='Ori DE directory not found', parent=self._tk_root, title=TITLE)
                 sys.exit(1)
 
-            ori_root = os.path.abspath(path)
-            assembly_csharp = os.path.join(ori_root, 'oriDE_Data', 'Managed', 'Assembly-CSharp.dll')
-            if os.path.exists(os.path.dirname(assembly_csharp)):
+            ori_root = os.path.abspath(ori_root)
+            assembly_csharp = self._switcher.get_assemblycsharp_path(ori_root)
+            if assembly_csharp:
                 break
 
             messagebox.showerror(
-                message='Invalid Ori DE directory. Should be the directory that contains oriDE.exe.',
-                parent=self.tk_root, title=TITLE)
+                message='Invalid Ori DE directory. Should be the directory that contains oriDE.exe',
+                parent=self._tk_root, title=TITLE)
 
-        return ori_root, assembly_csharp
+        self._switcher.ori_root = ori_root
 
     # new dll path was set
-    def _validate_path(self):
-        dll_name = self.combobox.get()
-        if self.dll_path:
-            self.stringvar_label_dll.set(self.dll_path.split(os.sep)[-1])
-            self.label_dll.configure(state=NORMAL)
-            self.button_apply.configure(state=NORMAL)
-            self.button_create_shortcut.configure(state=NORMAL)
+    def _validate_path(self, dll_path):
+        # self._stringvar_label_dll.set(self._dll_label_hint if not dll_path else '')
+        if dll_path:
+            # self._label_dll.configure(state=NORMAL)
+            self._button_apply.configure(state=NORMAL)
+            self._button_create_shortcut.configure(state=NORMAL)
         else:
-            self.stringvar_label_dll.set(self.dll_label_hint if dll_name else '')
-            self.label_dll.configure(state=DISABLED)
-            self.button_apply.configure(state=DISABLED)
-            self.button_create_shortcut.configure(state=DISABLED)
+            # self._label_dll.configure(state=DISABLED)
+            self._button_apply.configure(state=DISABLED)
+            self._button_create_shortcut.configure(state=DISABLED)
 
     # user chose a name from the list
     def _update_chosen_dll(self):
-        dll_name = self.combobox.get()
-        self.dll_path = self.dll_names[dll_name] if dll_name in self.dll_names else ''
-        self._validate_path()
-        self.button_locate.configure(state=NORMAL if dll_name else DISABLED)
+        dll_name = self._combobox.get()
+        dll_path = self._switcher.get_dll_path(dll_name)
+        self._validate_path(dll_path)
+        self._button_locate.configure(state=NORMAL if dll_name else DISABLED)
 
     # user clicked on button_new
     def _button_new(self):
-        self.combobox.configure(state=NORMAL)
-        self.combobox.set('')
-        self.combobox.focus()
+        self._combobox.configure(state=NORMAL)
+        self._combobox.set('')
+        self._combobox.focus()
         self._update_chosen_dll()
 
     # user pressed enter after typing a new name
     def _add_new_dll_name(self, name):
         if not name:
             return
-        self.dll_names[name] = ''
-        self.combobox.configure(values=tuple(self.dll_names.keys()), state="readonly")
+        self._switcher.add_dll_name(name)
+        self._combobox.configure(values=tuple(self._switcher.dll_names), state="readonly")
         self._update_chosen_dll()
 
     # user clicked on button_locate
     def _locate_dll(self):
-        dll_name = self.combobox.get()
+        dll_name = self._combobox.get()
         path = filedialog.askopenfilename(filetypes=[('DLL', '*.dll')],
-                                          initialdir=self.ori_root,
-                                          parent=self.tk_root,
+                                          initialdir=self._switcher.ori_root,
+                                          parent=self._tk_root,
                                           title=f'Choose your "{dll_name}" DLL file')
         if path:
-            self.dll_path = os.path.abspath(path)
-            self.dll_names[dll_name] = self.dll_path
-            self._validate_path()
+            dll_path = os.path.abspath(path)
+            self._switcher.set_dll_path(dll_name, dll_path)
+            self._validate_path(dll_path)
 
     # user clicked on button_apply
     def _apply(self):
-        shutil.copy(self.dll_path, self.assembly_csharp)
-        messagebox.showinfo(message='Done!', parent=self.tk_root, title=TITLE)
+        dll_name = self._combobox.get()
+        self._switcher.switch(dll_name)
+        messagebox.showinfo(message=f'Switched to {dll_name} DLL', parent=self._tk_root, title=TITLE)
         self._on_destroy()
 
     # user clicked on button_create_shortcut
     def _create_shortcut(self):
-        dll_name = self.combobox.get()
+        dll_name = self._combobox.get()
         shortcut_name = f'SwitchTo{dll_name.capitalize()}.lnk'
         win_cmd_path = r'C:\Windows\System32\cmd.exe'
         program_arg = os.path.basename(sys.argv[0])
@@ -154,11 +211,11 @@ class Switcher(object):
         elif program_arg.endswith('.exe'):
             program_arg = program_arg[:-4]
         else:
-            messagebox.showerror(message='Cannot create shortcut', parent=self.tk_root, title=TITLE)
+            messagebox.showerror(message='Cannot create shortcut', parent=self._tk_root, title=TITLE)
             return
         args = f'/c {program_arg} {dll_name}'
 
-        path = filedialog.askdirectory(parent=self.tk_root,
+        path = filedialog.askdirectory(parent=self._tk_root,
                                        title='Choose location',
                                        mustexist=True)
         if not path:
@@ -170,27 +227,31 @@ class Switcher(object):
         shortcut.Arguments = args
         shortcut.WorkingDirectory = os.getcwd()
         shortcut.save()
-        messagebox.showinfo(message='Shortcut created', parent=self.tk_root, title=TITLE)
+        messagebox.showinfo(message=f'Shortcut {shortcut_name[:-4]} created', parent=self._tk_root, title=TITLE)
 
     def _on_destroy(self):
-        self._store_dll_names()
-        self.tk_root.destroy()
+        self._switcher.save_data_json()
+        self._tk_root.destroy()
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Switch to a different Ori dll.')
+    switcher = Switcher()
+
+    parser = argparse.ArgumentParser(description='Switch to a different Ori dll')
     parser.add_argument('dll', nargs=argparse.OPTIONAL, help="the dll's name")
     args = parser.parse_args()
     if args.dll:
-        dll_names = Switcher.load_dll_names()
-        if args.dll not in dll_names:
-            sys.exit(f'"{args.dll}" DLL not found')
-        shutil.copy(dll_names[args.dll], ASSEMBLY_CSHARP)
-        print('Done!')
-        return
+        Tk().withdraw()
+        dll_name = args.dll
+        if dll_name not in switcher.dll_names:
+            messagebox.showerror(message=f'"{dll_name}" DLL not found', title=TITLE)
+            sys.exit(1)
+        switcher.switch(dll_name)
+        messagebox.showinfo(message=f'Switched to {dll_name} DLL', title=TITLE)
+        sys.exit()
 
-    gui = Switcher()
-    gui.tk_root.mainloop()
+    ui = Ui(switcher)
+    ui.mainloop()
 
 
 if __name__ == '__main__':
