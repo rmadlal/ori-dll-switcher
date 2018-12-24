@@ -2,6 +2,8 @@
 
 ### [Download](https://github.com/rmadlal/ori-dll-switcher/releases) ###
 
+![Screenshot](/screenshot.png)
+
 This program will locate the requested DLL and copy it into `...\Ori DE\oriDE_Data\Managed` with the name `Assembly-CSharp.dll` for you.
 
 Run OriDLLSwitcher.exe, click on "New" and choose a short name for your DLL (e.g "rando", "nopause" etc). Then click on "Locate DLL" and select the proper file. Finally, hit "Apply".  
