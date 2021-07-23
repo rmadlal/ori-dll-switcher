@@ -6,7 +6,7 @@
 
 This program will locate the requested DLL and copy it into `...\Ori DE\oriDE_Data\Managed` with the name `Assembly-CSharp.dll` for you.
 
-Run OriDLLSwitcher.exe, click on "New" and choose a short name for your DLL (e.g "rando", "nopause" etc). Then click on "Locate DLL" and select the proper file. Finally, hit "Apply".  
+Run OriDLLSwitcher.exe and choose a short name for your DLL (e.g "rando", "nopause" etc). Then click on "Set DLL" and select the proper file. Finally, hit "Apply".  
 DLL names will be saved so that you would simply pick your DLL from the list and click "Apply".
 
 You can also create a shortcut for an instant DLL switch by selecting a DLL name and clicking on "Create shortcut".  
