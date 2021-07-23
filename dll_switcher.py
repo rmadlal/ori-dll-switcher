@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import shutil
+import sys
 from tkinter import *
 from tkinter import filedialog, messagebox
 from tkinter.ttk import Combobox
@@ -11,15 +12,13 @@ from win32com.client import Dispatch
 TITLE = 'Ori DLL Switcher'
 ORI_ROOT = r'C:\Program Files (x86)\Steam\steamapps\common\Ori DE'
 ASSEMBLY_CSHARP = r'oriDE_Data\Managed\Assembly-CSharp.dll'
-SWITCHER_JSON = 'dll_switcher.json'
+SWITCHER_JSON_PATH = os.path.join(os.path.dirname(__file__), 'dll_switcher.json')
 KEY_ROOT = 'root'
 KEY_DLL_NAMES = 'dll_names'
 
 
 class SwitcherException(Exception):
-
-    def __init__(self, message):
-        super(SwitcherException, self).__init__(message)
+    pass
 
 
 class Switcher(object):
@@ -40,7 +39,7 @@ class Switcher(object):
 
     def _load_data_json(self):
         try:
-            with open(SWITCHER_JSON) as f:
+            with open(SWITCHER_JSON_PATH) as f:
                 data = json.load(f)
                 if not self._check_data_valid(data):
                     return None
@@ -49,7 +48,7 @@ class Switcher(object):
             return None
 
     def save_data_json(self):
-        with open(SWITCHER_JSON, 'w') as f:
+        with open(SWITCHER_JSON_PATH, 'w') as f:
             json.dump(self._data, f)
 
     @staticmethod
@@ -73,16 +72,10 @@ class Switcher(object):
     def dll_names(self):
         return self._data[KEY_DLL_NAMES]
 
-    def add_dll_name(self, name):
-        self.set_dll_path(name, '')
-
     def get_dll_path(self, name):
         return self.dll_names[name] if name in self.dll_names else None
 
     def set_dll_path(self, name, path):
-        # Check if this is the original-location Assembly-CSharp.dll
-        if path == self.assembly_csharp:
-            raise SwitcherException('This file cannot be chosen')
         self.dll_names[name] = path
 
     def switch(self, name):
@@ -97,35 +90,42 @@ class Ui(object):
         self._switcher = switcher
         self._tk_root = Tk()
         self._tk_root.title(TITLE)
-        self._tk_root.columnconfigure(0, weight=1)
-        self._tk_root.rowconfigure(1, weight=1)
-        self._tk_root.geometry('260x90')
+        self._tk_root.columnconfigure(1, weight=1)
+        self._tk_root.rowconfigure(2, weight=1)
+        self._tk_root.geometry('560x120')
         self._tk_root.protocol('WM_DELETE_WINDOW', self._on_destroy)
 
         # UI elements
+        # |---------|-----------------|
+        # | Name:   | dropdown        |
+        # | Set DLL | dll path text   |
+        # | Apply   | Create shortcut |
 
-        self._combobox = Combobox(self._tk_root, values=tuple(self._switcher.dll_names), state="readonly")
-        self._combobox.grid(row=0, column=0, columnspan=2, padx=8, pady=8, sticky=W + E)
-        self._combobox.bind('<<ComboboxSelected>>', lambda evt: self._update_chosen_dll())
-        self._combobox.bind('<Return>', lambda evt: self._add_new_dll_name(self._combobox.get()))
+        self._text_dll_name = Label(self._tk_root, text='Name:', anchor=W)
+        self._text_dll_name.grid(row=0, column=0, padx=8, sticky=W)
+
+        self._combobox = Combobox(self._tk_root, values=tuple(self._switcher.dll_names),
+            validate='key', validatecommand=(self._tk_root.register(self._dll_name_typed), '%P'))
+        self._combobox.grid(row=0, column=1, padx=8, pady=8, sticky=W)
+        self._combobox.bind('<<ComboboxSelected>>', lambda _: self._dll_name_selected())
         if self._switcher.dll_names:
             self._combobox.current(0)
 
-        self._button_new = Button(self._tk_root, text='New', command=self._button_new)
-        self._button_new.grid(row=0, column=2, padx=8, sticky=W + E)
+        self._button_set_dll = Button(self._tk_root, text='Set DLL', command=self._set_dll)
+        self._button_set_dll.grid(row=1, column=0, padx=8, sticky=W)
 
-        self._button_locate = Button(self._tk_root, text='Locate DLL', command=self._locate_dll)
-        self._button_locate.grid(row=1, column=0, padx=8, pady=8, sticky=W + S)
+        self._text_dll_path = Label(self._tk_root, anchor=W)
+        self._text_dll_path.grid(row=1, column=1, columnspan=2, padx=8, sticky=W)
+
+        self._button_apply = Button(self._tk_root, text='Apply', command=self._apply)
+        self._button_apply.grid(row=2, column=0, columnspan=2, padx=8, pady=8, sticky=W + S)
 
         self._button_create_shortcut = Button(
-            self._tk_root, text='Create shortcut', command=self._create_shortcut, state=DISABLED)
-        self._button_create_shortcut.grid(row=1, column=1, padx=8, pady=8, sticky=S)
-
-        self._button_apply = Button(self._tk_root, text='Apply', command=self._apply, state=DISABLED)
-        self._button_apply.grid(row=1, column=2, padx=8, pady=8, sticky=E + S)
+            self._tk_root, text='Create shortcut', command=self._create_shortcut)
+        self._button_create_shortcut.grid(row=2, column=1, padx=8, pady=8, sticky=W + S)
 
         self._validate_ori_root()
-        self._update_chosen_dll()
+        self._dll_name_selected()
 
     def _validate_ori_root(self):
         if self._switcher.assembly_csharp:
@@ -151,48 +151,44 @@ class Ui(object):
         self._switcher.ori_root = ori_root
 
     # new dll path was set
-    def _validate_path(self, dll_path):
+    def _update_dll_path(self, dll_path):
+        self._text_dll_path.configure(text=dll_path or '')
         self._button_apply.configure(state=NORMAL if dll_path else DISABLED)
         self._button_create_shortcut.configure(state=NORMAL if dll_path else DISABLED)
 
-    # user chose a name from the list
-    def _update_chosen_dll(self):
-        dll_name = self._combobox.get()
+    # dll name changed
+    def _update_dll_name(self, dll_name):
+        self._button_set_dll.configure(state=NORMAL if dll_name else DISABLED)
         dll_path = self._switcher.get_dll_path(dll_name)
-        self._validate_path(dll_path)
-        self._button_locate.configure(state=NORMAL if dll_name else DISABLED)
+        self._update_dll_path(dll_path)
 
-    # user clicked on button_new
-    def _button_new(self):
-        self._combobox.configure(state=NORMAL)
-        self._combobox.set('')
-        self._combobox.focus()
-        self._update_chosen_dll()
+    # user chose a name from the list
+    def _dll_name_selected(self):
+        self._update_dll_name(self._combobox.get())
 
-    # user pressed enter after typing a new name
-    def _add_new_dll_name(self, name):
-        if not name:
-            return
-        self._switcher.add_dll_name(name)
-        self._combobox.configure(values=tuple(self._switcher.dll_names), state="readonly")
-        self._update_chosen_dll()
+    # user is typing a name (combobox validatecommand callback)
+    def _dll_name_typed(self, text):
+        self._update_dll_name(text)
+        return True
 
-    # user clicked on button_locate
-    def _locate_dll(self):
+    # user clicked on button_set_dll
+    def _set_dll(self):
         dll_name = self._combobox.get()
-        path = filedialog.askopenfilename(filetypes=[('DLL', '*.dll')],
-                                          initialdir=self._switcher.ori_root,
-                                          parent=self._tk_root,
-                                          title=f'Choose your "{dll_name}" DLL file')
-        if not path:
+        dll_path = filedialog.askopenfilename(filetypes=[('DLL', '*.dll')],
+                                              initialdir=self._switcher.ori_root,
+                                              parent=self._tk_root,
+                                              title=f'Choose your "{dll_name}" DLL file')
+        if not dll_path:
+            return
+        dll_path = os.path.abspath(dll_path)
+        if dll_path == self._switcher.assembly_csharp:
+            messagebox.showerror(message="You cannot choose the game's original DLL path.\nIf this is your mod DLL, please rename it or copy it elsewhere.",
+                                 title=TITLE)
             return
 
-        try:
-            dll_path = os.path.abspath(path)
-            self._switcher.set_dll_path(dll_name, dll_path)
-            self._validate_path(dll_path)
-        except SwitcherException as e:
-            messagebox.showerror(message=e, title=TITLE)
+        self._switcher.set_dll_path(dll_name, dll_path)
+        self._update_dll_path(dll_path)
+        self._combobox.configure(values=tuple(self._switcher.dll_names))
 
     # user clicked on button_apply
     def _apply(self):
@@ -210,28 +206,28 @@ class Ui(object):
         dll_name = self._combobox.get()
         shortcut_name = f'SwitchTo{dll_name.capitalize()}.lnk'
         win_cmd_path = r'C:\Windows\System32\cmd.exe'
-        program_arg = os.path.basename(sys.argv[0])
+        program_dir, program_filename = os.path.split(__file__)
 
-        if program_arg.endswith('.py'):
-            program_arg = 'python ' + program_arg
-        elif program_arg.endswith('.exe'):
-            program_arg = program_arg[:-4]
+        if program_filename.endswith('.py'):
+            program_filename = 'py ' + program_filename
+        elif program_filename.endswith('.exe'):
+            program_filename = program_filename[:-4]
         else:
             messagebox.showerror(message='Cannot create shortcut', parent=self._tk_root, title=TITLE)
             return
-        args = f'/c {program_arg} {dll_name}'
+        args = f'/c {program_filename} {dll_name}'
 
-        path = filedialog.askdirectory(parent=self._tk_root,
-                                       title='Choose location',
-                                       mustexist=True)
-        if not path:
+        shortcut_dir = filedialog.askdirectory(parent=self._tk_root,
+                                               title='Choose location',
+                                               mustexist=True)
+        if not shortcut_dir:
             return
-        path = os.path.abspath(path)
+        shortcut_dir = os.path.abspath(shortcut_dir)
 
-        shortcut = Dispatch('WScript.Shell').CreateShortCut(os.path.join(path, shortcut_name))
+        shortcut = Dispatch('WScript.Shell').CreateShortCut(os.path.join(shortcut_dir, shortcut_name))
         shortcut.Targetpath = win_cmd_path
         shortcut.Arguments = args
-        shortcut.WorkingDirectory = os.getcwd()
+        shortcut.WorkingDirectory = program_dir
         shortcut.save()
         messagebox.showinfo(message=f'Shortcut {shortcut_name[:-4]} created', parent=self._tk_root, title=TITLE)
 
