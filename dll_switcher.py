@@ -12,7 +12,7 @@ from win32com.client import Dispatch
 TITLE = 'Ori DLL Switcher'
 ORI_ROOT = r'C:\Program Files (x86)\Steam\steamapps\common\Ori DE'
 ASSEMBLY_CSHARP = r'oriDE_Data\Managed\Assembly-CSharp.dll'
-SWITCHER_JSON_PATH = os.path.join(os.path.dirname(__file__), 'dll_switcher.json')
+SWITCHER_JSON_PATH = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), 'dll_switcher.json')
 KEY_ROOT = 'root'
 KEY_DLL_NAMES = 'dll_names'
 
@@ -206,13 +206,11 @@ class Ui(object):
         dll_name = self._combobox.get()
         shortcut_name = f'SwitchTo{dll_name.capitalize()}.lnk'
         win_cmd_path = r'C:\Windows\System32\cmd.exe'
-        program_dir, program_filename = os.path.split(__file__)
+        program_dir, program_filename = os.path.split(os.path.abspath(sys.argv[0]))
 
         if program_filename.endswith('.py'):
             program_filename = 'py ' + program_filename
-        elif program_filename.endswith('.exe'):
-            program_filename = program_filename[:-4]
-        else:
+        elif not program_filename.endswith('.exe'):
             messagebox.showerror(message='Cannot create shortcut', parent=self._tk_root, title=TITLE)
             return
         args = f'/c {program_filename} {dll_name}'
